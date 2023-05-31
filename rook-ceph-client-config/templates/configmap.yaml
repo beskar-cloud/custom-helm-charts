@@ -1,0 +1,14 @@
+apiVersion: v1
+data:
+  ceph.conf: |
+    [global]
+    mon_host = <mon-hosts>
+    cephx = true
+    cephx_cluster_require_signatures = true
+    cephx_require_signatures = false
+    cephx_service_require_signatures = false
+kind: ConfigMap
+metadata:
+  name: {{ .Values.configmaps.cephConfiguration.name }}-template
+  labels:
+    app: rook-ceph-client-config

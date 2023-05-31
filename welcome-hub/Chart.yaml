@@ -1,0 +1,15 @@
+apiVersion: v2
+name: welcome-hub
+description: Welcome Hub static webpage helm chart
+
+type: application
+version: &version 1.0.1
+appVersion: *version
+
+sources:
+  - https://gitlab.ics.muni.cz/cloud/g2/custom-helm-charts/-/tree/master/edge-proxy
+
+maintainers:
+  - name: e-INFRA CZ cloud team
+
+

@@ -1,0 +1,34 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  labels:
+    app: rook-ceph-client-config
+  name: secret-cleanup
+  annotations:
+    "helm.sh/hook": pre-delete
+spec:
+  template:
+    metadata:
+      labels:
+        app: rook-ceph-client-config
+        job-name: secret-cleanup
+    spec:
+      containers:
+      - name: secret-cleanup
+        command:
+        - /tmp/secret-cleanup.sh
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        volumeMounts:
+        - mountPath: /tmp/secret-cleanup.sh
+          name: rook-ceph-client-config-bin
+          readOnly: true
+          subPath: secret-cleanup.sh
+      restartPolicy: OnFailure
+      serviceAccount: rook-ceph-client-config
+      serviceAccountName: rook-ceph-client-config
+      volumes:
+      - configMap:
+          defaultMode: 365
+          name: rook-ceph-client-config-bin
+        name: rook-ceph-client-config-bin

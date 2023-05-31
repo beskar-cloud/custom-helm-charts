@@ -1,0 +1,17 @@
+# Default values for rook-ceph-int-mon-svc.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+services:
+  cephMonitors: &ceph-monitor-service
+    name: ceph-mon
+    type: ClusterIP
+    labels:
+      app: rook-ceph-mon
+    selectorLabels:
+      app: rook-ceph-mon
+
+  cephMonitorsForDiscovery:
+    <<: *ceph-monitor-service
+    name: ceph-mon-discovery
+

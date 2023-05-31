@@ -1,0 +1,29 @@
+# Default values for welcome-hub.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+
+labels: &common-manifest-labels
+  app: welcome-hub
+
+# when namespace is needed define namespace.name as not-null string
+namespace:
+  name: null
+
+deployment:
+  replicaCount: 3
+  labels: *common-manifest-labels
+    
+
+image:
+  repository: registry.gitlab.ics.muni.cz:443/cloud/g2/welcomehub-ostrava
+  pullPolicy: Always
+  tag: "latest"
+
+service:
+  labels: *common-manifest-labels
+  port: 80
+  targetPort: 8080
+  selector:
+    *common-manifest-labels
+  type: ClusterIP

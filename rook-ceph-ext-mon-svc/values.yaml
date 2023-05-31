@@ -1,0 +1,30 @@
+# Default values for rook-ceph-ext-mon-svc.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# service objects
+services:
+  cephMonitors: &ceph-monitors-service
+    name: &ceph-monitors-service-name ceph-mon
+    type: ClusterIP
+    labels: &ceph-monitors-labels
+      app: rook-ceph-mon
+    selectorLabels:
+      app: rook-ceph-mon
+
+  cephMonitorsForDiscovery:
+    <<: *ceph-monitors-service
+    name: &ceph-monitors-discovery-service-name ceph-mon-discovery
+
+# endpoints objects
+endpoints:
+  cephMonitors: &ceph-monitors-endpoints
+    name: *ceph-monitors-service-name
+    labels: *ceph-monitors-labels
+    addresses: []
+    #- ip: 10.9.0.112
+    #...
+    #- ip: 10.9.0.3
+  cephMonitorsForDiscovery:
+    <<: *ceph-monitors-endpoints
+    name: *ceph-monitors-discovery-service-name

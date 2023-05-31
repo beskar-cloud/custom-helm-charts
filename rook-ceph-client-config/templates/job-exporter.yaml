@@ -1,0 +1,40 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  labels:
+    app: rook-ceph-client-config
+  name: ceph-client-admin-keyring-exporter
+spec:
+  template:
+    metadata:
+      labels:
+        app: rook-ceph-client-config
+        job-name: ceph-client-admin-keyring-exporter
+    spec:
+      containers:
+      - name: ceph-client-admin-keyring-exporter
+        command:
+        - /tmp/ceph-client-admin-keyring-exporter.sh
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        volumeMounts:
+        - mountPath: /tmp/ceph-client-admin-keyring-exporter.sh
+          name: rook-ceph-client-config-bin
+          readOnly: true
+          subPath: ceph-client-admin-keyring-exporter.sh
+        - mountPath: /tmp/ceph-template.conf
+          name: ceph-etc-template
+          readOnly: true
+          subPath: ceph.conf
+      restartPolicy: OnFailure
+      serviceAccount: rook-ceph-client-config
+      serviceAccountName: rook-ceph-client-config
+      volumes:
+      - configMap:
+          defaultMode: 365
+          name: rook-ceph-client-config-bin
+        name: rook-ceph-client-config-bin
+      - configMap:
+          defaultMode: 365
+          name: {{ .Values.configmaps.cephConfiguration.name }}-template
+        name: ceph-etc-template

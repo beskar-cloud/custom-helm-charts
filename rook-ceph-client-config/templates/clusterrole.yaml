@@ -1,0 +1,21 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app: rook-ceph-client-config
+  name: rook-ceph-client-config
+rules:
+- apiGroups:
+  - '*'
+  resources: &resources
+  - secrets
+  - configmaps
+  verbs: &verbs
+  - get
+  - list
+  - create
+  - delete
+- apiGroups:
+  - ''
+  resources: *resources
+  verbs: *verbs

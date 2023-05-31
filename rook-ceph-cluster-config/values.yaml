@@ -1,0 +1,51 @@
+# Default values for rook-ceph-cluster-config.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+image:
+  repository: &kubectl-image docker.io/bitnami/kubectl
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: &kubectl-version 1.24.9
+
+# named configmaps
+configmaps:
+  # internal helm chart configmaps (binary & configuration)
+  # typically no need to change
+  internal:
+    scripts:
+      name: rook-ceph-cluster-config-bin
+  # generated ceph ceph.conf configmap is placed to namespace where is chart installed
+  output:
+    cephConfiguration:
+      name: ceph-etc
+
+# name of the jobs performing desired actions
+jobs:
+  exporter: # configmap generator job
+    name: rook-ceph-cluster-config-exporter
+  cleanup:  # configmap cleanup job
+    name: rook-ceph-cluster-config-cleanup
+
+clusterRole:
+  name: &app rook-ceph-cluster-config
+clusterRoleBinding:
+  name: *app
+serviceAccount:
+  name: *app
+
+# ceph.conf configuration (template)
+# <mon-hosts> is expanded if found
+cephClusterConfiguration: |
+  [global]
+  mon_host = <mon-hosts>
+  cephx = true
+  cephx_cluster_require_signatures = true
+  cephx_require_signatures = false
+  cephx_service_require_signatures = false
+
+# reference to kubernetes ceph monitors service/endpoints object (used to detect ceph monitor IPs for <mon-hosts> replacement)
+cephMonitorService:
+  namespace: rook-ceph
+  name: ceph-mon-discovery
+

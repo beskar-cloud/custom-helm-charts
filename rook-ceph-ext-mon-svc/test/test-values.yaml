@@ -1,0 +1,11 @@
+# Specific values for rook-ceph-ext-mon-svc.
+# This is a YAML-formatted file.
+
+# endpoints objects
+endpoints:
+  cephMonitors: &ceph-monitors-endpoints
+    addresses:
+    - ip: 10.9.0.112
+    - ip: 10.9.0.3
+  cephMonitorsForDiscovery:
+    <<: *ceph-monitors-endpoints

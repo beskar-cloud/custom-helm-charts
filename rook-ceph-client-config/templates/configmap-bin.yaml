@@ -1,0 +1,65 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: "{{ .Values.configmaps.scripts.name }}"
+  labels:
+    app: rook-ceph-client-config
+data:
+
+  ceph-client-admin-keyring-exporter.sh: |
+    #!/usr/bin/env bash
+    # ceph-client-admin-keyring-exporter.sh
+
+    set -ex
+
+    DATADIR=/tmp/rook-ceph-client-config
+    SOURCE_NAMESPACE="{{ .Values.secrets.source.namespace }}"
+    SOURCE_SECRET_NAME="{{ .Values.secrets.source.name }}"
+    SOURCE_CLIENT_ADMIN_PASSWORD_FILE="${DATADIR}/client.admin.password"
+    DESTINATION_NAMESPACE="{{ .Values.secrets.destination.namespace }}"
+    DESTINATION_SECRET_NAME="{{ .Values.secrets.destination.name }}"
+    SOURCE_CONFIGMAP_NAME="rook-ceph-mon-endpoints"
+    SOURCE_CONFIGMAP_TEMPLATE_FILE="/tmp/ceph-template.conf"
+    DESTINATION_CONFIGMAP_FILE="/tmp/ceph.conf"
+    DESTINATION_CONFIGMAP_NAME="{{ .Values.configmaps.cephConfiguration.name }}"
+
+    mkdir -p "${DATADIR}"
+    trap "rm -rf ${DATADIR}" EXIT
+
+    # transform secret from source ns to destination ns
+    kubectl -n "${SOURCE_NAMESPACE}" get secret "${SOURCE_SECRET_NAME}" -o 'jsonpath={.data.keyring}' > ${DATADIR}/client.admin.full.keyring
+    cat ${DATADIR}/client.admin.full.keyring | base64 -d | grep key | grep -Eo '[A-Za-z0-9_/+=\.]{4,}' > ${SOURCE_CLIENT_ADMIN_PASSWORD_FILE}
+
+    if ! kubectl -n "${DESTINATION_NAMESPACE}" get secret "${DESTINATION_SECRET_NAME}"; then
+        kubectl -n "${DESTINATION_NAMESPACE}" create secret generic "${DESTINATION_SECRET_NAME}" --from-literal=key=$(head -1 "${SOURCE_CLIENT_ADMIN_PASSWORD_FILE}")
+    fi
+
+    kubectl -n "${DESTINATION_NAMESPACE}" get secret "${DESTINATION_SECRET_NAME}"
+    
+    # configmap create configmap in destination ns, take into account
+    # * configmap template
+    # * ceph monitor ip addresses from a source configmap
+    MON_ENDPOINTS="$(kubectl -n "${SOURCE_NAMESPACE}" get cm "${SOURCE_CONFIGMAP_NAME}" -o jsonpath={.data.data} | grep -Eo '[0-9]+.[0-9]+.[0-9]+.[0-9]+:[0-9]{4}' | awk '{printf $1 ","}')"
+
+    sed "s/<mon-hosts>/${MON_ENDPOINTS%%,}/g" ${SOURCE_CONFIGMAP_TEMPLATE_FILE} > ${DESTINATION_CONFIGMAP_FILE}
+    kubectl -n "${DESTINATION_NAMESPACE}" delete configmap --ignore-not-found=true ${DESTINATION_CONFIGMAP_NAME}
+    cat ${DESTINATION_CONFIGMAP_FILE}
+    kubectl -n "${DESTINATION_NAMESPACE}" create configmap ${DESTINATION_CONFIGMAP_NAME} --from-file=${DESTINATION_CONFIGMAP_FILE}
+    kubectl -n "${DESTINATION_NAMESPACE}" get configmap ${DESTINATION_CONFIGMAP_NAME}
+
+    echo ".done"
+
+  secret-cleanup.sh: |
+    #!/bin/bash
+    # secret-cleanup.sh
+
+    DESTINATION_NAMESPACE="{{ .Values.secrets.destination.namespace }}"
+    DESTINATION_SECRET_NAME="{{ .Values.secrets.destination.name }}"
+    DESTINATION_CONFIGMAP_NAME="{{ .Values.configmaps.cephConfiguration.name }}"
+
+    set -ex
+
+    kubectl -n "${DESTINATION_NAMESPACE}" delete secret --ignore-not-found=true "${DESTINATION_SECRET_NAME}"
+    kubectl -n "${DESTINATION_NAMESPACE}" delete configmap --ignore-not-found=true "${DESTINATION_CONFIGMAP_NAME}"
+
+    echo ".done"

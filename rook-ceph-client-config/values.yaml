@@ -1,0 +1,29 @@
+# Default values for rook-ceph-client-config.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+image:
+  repository: &kubectl-image docker.io/bitnami/kubectl
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: &kubectl-version 1.24.7
+
+# named configmaps
+configmaps:
+  scripts:
+    name: rook-ceph-client-config-bin
+  cephConfiguration:
+    name: ceph-etc
+
+# ceph configuration
+cephConfiguration:
+  monitorHosts: "[v2:ceph-mon.rook-ceph.svc.cluster.local:3300,v1:ceph-mon.rook-ceph.svc.cluster.local:6789]"
+
+# transform source secret into destination one
+secrets:
+  source:
+    namespace: rook-ceph
+    name: rook-ceph-admin-keyring
+  destination:
+    namespace: openstack
+    name: pvc-ceph-client-key

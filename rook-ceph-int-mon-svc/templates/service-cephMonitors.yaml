@@ -1,0 +1,22 @@
+
+{{- $service := .Values.services.cephMonitors }}
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $service.name }}
+  labels:
+    {{- toYaml $service.labels | nindent 4 }}
+spec:
+  type: {{ $service.type }}
+  ports:
+  - name: mon
+    port: 6789
+    protocol: TCP
+    targetPort: 6789
+  - name: mon-msgr2
+    port: 3300
+    protocol: TCP
+    targetPort: 3300
+  selector:
+    {{- toYaml $service.selectorLabels | nindent 4 }}

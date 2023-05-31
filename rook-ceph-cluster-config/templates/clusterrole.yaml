@@ -1,0 +1,35 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app: &app rook-ceph-cluster-config
+  name: {{ .Values.clusterRole.name }}
+rules:
+# read services and endpoints
+- apiGroups:
+  - '*'
+  resources: &resources-ro
+  - services
+  - endpoints
+  verbs: &verbs-ro
+  - get
+  - list
+- apiGroups:
+  - ''
+  resources: *resources-ro
+  verbs: *verbs-ro
+# full access to configmaps
+- apiGroups:
+  - '*'
+  resources: &resources-rw
+  - configmaps
+  verbs: &verbs-rw
+  - get
+  - list
+  - create
+  - delete
+- apiGroups:
+  - ''
+  resources: *resources-rw
+  verbs: *verbs-rw
+

@@ -1,0 +1,270 @@
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+---
+name: edge-proxy
+
+image:
+  repository: traefik
+  tag: v2.9.8
+  pullPolicy: IfNotPresent
+
+namespace:
+  name: edge-proxy
+
+deployment:
+  replicaCount: 6
+  labels:
+    app: edge-proxy
+  nodeSelector:
+    node-role.kubernetes.io/control-plane: ""
+
+service:
+  loadBalancerIP:
+    enabled: true
+    ip: 195.113.175.91
+    allocateLoadBalancerNodePorts: true
+  selector:
+    app: edge-proxy
+  type: LoadBalancer
+
+manifests:
+  namespace: true
+  service: true
+  deployment: true
+  configs_configmap: true
+  certs_secret: false # re-use existing secret
+
+configuration:
+  traefik-routes.yaml:
+    http:
+      # edge proxy L7 routes
+      routers:
+        # keystone ----------------------------------------------------------
+        http_keystone: &router_http_keystone
+          rule: "Host(`identity.ostrava.openstack.cloud`)"
+          service: backend_keystone
+          entryPoints: &common-traefik-entrypoints ["secure"]
+        https_keystone:
+          <<: *router_http_keystone
+          tls: {}
+
+        # cinder ------------------------------------------------------------
+        http_cinder: &router_http_cinder
+          rule: "Host(`volume.ostrava.openstack.cloud`) || Host(`volumev3.ostrava.openstack.cloud`)"
+          service: backend_cinder
+          entryPoints: *common-traefik-entrypoints
+        https_cinder:
+          <<: *router_http_cinder
+          tls: {}
+
+        # nova --------------------------------------------------------------
+        http_nova: &router_http_nova
+          rule: "Host(`compute.ostrava.openstack.cloud`)"
+          service: backend_nova
+          entryPoints: *common-traefik-entrypoints
+        https_nova:
+          <<: *router_http_nova
+          tls: {}
+
+        # barbican ----------------------------------------------------------
+        http_barbican: &router_http_barbican
+          rule: "Host(`secret.ostrava.openstack.cloud`) || Host(`key-manager.ostrava.openstack.cloud`)"
+          service: backend_barbican
+          entryPoints: *common-traefik-entrypoints
+        https_barbican:
+          <<: *router_http_barbican
+          tls: {}
+
+        # glance ------------------------------------------------------------
+        http_glance: &router_http_glance
+          rule: "Host(`image.ostrava.openstack.cloud`)"
+          service: backend_glance
+          entryPoints: *common-traefik-entrypoints
+        https_glance:
+          <<: *router_http_glance
+          tls: {}
+
+        # placement ---------------------------------------------------------
+        http_placement: &router_http_placement
+          rule: "Host(`placement.ostrava.openstack.cloud`)"
+          service: backend_placement
+          entryPoints: *common-traefik-entrypoints
+        https_placement:
+          <<: *router_http_placement
+          tls: {}
+
+        # heat --------------------------------------------------------------
+        http_heat: &router_http_heat
+          rule: "Host(`orchestration.ostrava.openstack.cloud`)"
+          service: backend_heat
+          entryPoints: *common-traefik-entrypoints
+        https_heat:
+          <<: *router_http_heat
+          tls: {}
+
+        # neutron -----------------------------------------------------------
+        http_neutron: &router_http_neutron
+          rule: "Host(`network.ostrava.openstack.cloud`)"
+          service: backend_neutron
+          entryPoints: *common-traefik-entrypoints
+        https_neutron:
+          <<: *router_http_neutron
+          tls: {}
+
+        # heat-cfn ----------------------------------------------------------
+        http_heat_cfn: &router_http_heat_cfn
+          rule: "Host(`cloudformation.ostrava.openstack.cloud`)"
+          service: backend_heat_cfn
+          entryPoints: *common-traefik-entrypoints
+        https_heat_cfn:
+          <<: *router_http_heat_cfn
+          tls: {}
+
+        # swift / rados gateway ---------------------------------------------
+        http_swift_radosgw: &router_http_swift_radosgw
+          rule: "Host(`object-store.ostrava.openstack.cloud`)"
+          service: backend_swift_radosgw
+          entryPoints: *common-traefik-entrypoints
+        https_swift_radosgw:
+          <<: *router_http_swift_radosgw
+          tls: {}
+
+        # horizon -----------------------------------------------------------
+        http_horizon: &router_http_horizon
+          rule: "Host(`horizon.ostrava.openstack.cloud`)"
+          service: backend_horizon
+          entryPoints: *common-traefik-entrypoints
+        https_horizon:
+          <<: *router_http_horizon
+          tls: {}
+
+        # welcome-hub -------------------------------------------------------
+        http_welcome_hub: &router_http_welcome_hub
+          rule: "Host(`ostrava.openstack.cloud`)"
+          service: backend_welcome_hub
+          entryPoints: *common-traefik-entrypoints
+        https_welcome_hub:
+          <<: *router_http_welcome_hub
+          tls: {}
+      
+      # edge proxy backend services
+      services:
+        backend_keystone:
+          loadBalancer: &ostack-service-loadbalancer
+            passHostHeader: true
+            servers:
+            - url: "http://keystone-api.openstack.svc.cluster.local:5000"
+        backend_cinder:
+          loadBalancer:
+            <<: *ostack-service-loadbalancer
+            servers:
+            - url: "http://cinder-api.openstack.svc.cluster.local:8776"
+        backend_nova:
+          loadBalancer:
+            <<: *ostack-service-loadbalancer
+            servers:
+            - url: "http://nova-api.openstack.svc.cluster.local:8774"
+        backend_barbican:
+          loadBalancer:
+            <<: *ostack-service-loadbalancer
+            servers:
+            - url: "http://barbican-api.openstack.svc.cluster.local:9311"
+        backend_glance:
+          loadBalancer:
+            <<: *ostack-service-loadbalancer
+            servers:
+            - url: "http://glance-api.openstack.svc.cluster.local:9292"
+        backend_placement:
+          loadBalancer:
+            <<: *ostack-service-loadbalancer
+            servers:
+            - url: "http://placement-api.openstack.svc.cluster.local:8778"
+        backend_heat:
+          loadBalancer:
+            <<: *ostack-service-loadbalancer
+            servers:
+            - url: "http://heat-api.openstack.svc.cluster.local:8004"
+        backend_neutron:
+          loadBalancer:
+            <<: *ostack-service-loadbalancer
+            servers:
+            - url: "http://neutron-server.openstack.svc.cluster.local:9696"
+        backend_heat_cfn:
+          loadBalancer:
+            <<: *ostack-service-loadbalancer
+            servers:
+            - url: "http://heat-cfn.openstack.svc.cluster.local:8000"
+        backend_swift_radosgw:
+          loadBalancer:
+            <<: *ostack-service-loadbalancer
+            servers:
+            - url: "http://ceph-rgw.openstack.svc.cluster.local:8088"
+        backend_horizon:
+          loadBalancer:
+            <<: *ostack-service-loadbalancer
+            servers:
+            - url: "http://horizon-int.openstack.svc.cluster.local:80"
+        backend_welcome_hub:
+          loadBalancer:
+            <<: *ostack-service-loadbalancer
+            servers:
+            - url: "http://welcome-hub.welcome-hub.svc.cluster.local:80"
+    
+    # backend certificates
+    tls:
+      certificates:
+      - certFile: /etc/traefik-certs/ostrava.openstack.cloud.crt
+        keyFile: /etc/traefik-certs/ostrava.openstack.cloud.key
+      - certFile: /etc/traefik-certs/wildcard.ostrava.openstack.cloud.crt
+        keyFile: /etc/traefik-certs/wildcard.ostrava.openstack.cloud.key
+
+  traefik.yaml:
+    # edge-proxy bound addresses
+    entryPoints:
+      # HTTP, port 80
+      unsecure:
+        address: "0.0.0.0:80"
+        # http -> https redirect
+        http:
+          redirections:
+            entryPoint:
+              to: secure
+              scheme: "https"
+      # HTTPS, port 443
+      secure:
+        address: "0.0.0.0:443"
+
+    # default certificates
+    tls:
+      stores:
+        default:
+          minVersion: VersionTLS12
+          defaultCertificate:
+            certFile: /etc/traefik-certs/wildcard.ostrava.openstack.cloud.crt
+            keyFile: /etc/traefik-certs/wildcard.ostrava.openstack.cloud.key
+
+    # logging
+    log:
+      level: INFO
+    accessLog: {}
+
+    # internal dashboard
+    api:
+      dashboard: true
+      insecure: true
+
+    # routers + middleware + backends file configuration
+    providers:
+      file:
+        filename: /etc/traefik/traefik-routes.yaml
+        watch: true

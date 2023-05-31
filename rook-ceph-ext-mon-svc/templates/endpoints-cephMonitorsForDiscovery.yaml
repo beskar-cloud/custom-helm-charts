@@ -1,0 +1,19 @@
+
+{{- $e := .Values.endpoints.cephMonitorsForDiscovery }}
+
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: {{ $e.name }}
+  labels:
+    {{- toYaml $e.labels | nindent 4 }}
+subsets:
+- addresses:
+  {{- toYaml $e.addresses | nindent 2 }}
+  ports:
+  - name: mon
+    port: 6789
+    protocol: TCP
+  - name: mon-msgr2
+    port: 3300
+    protocol: TCP
