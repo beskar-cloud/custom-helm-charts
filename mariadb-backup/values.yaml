@@ -1,0 +1,20 @@
+image:
+  repository: docker.io/breton/mariadb-backup
+  tag: latest
+
+cronjob:
+  schedule: "0 2 * * *"
+
+config:
+  mariadbHostName: "openstack"
+  s3Host: "minio"
+  s3Port: "9000"
+  s3AccessKeyId: "user"
+  s3SecretAccessKey: "secret"
+  s3BackupPath: "backup"
+  mariadbUser: "user"
+  mariadbPassword: "secret"
+  mariadbHost: "mariadb-server"
+  mariadbPort: "5432"
+  mariadbDbs: "cinder glance heat horizon keystone neutron nova nova_api nova_cell0 octavia barbican placement"
+

@@ -1,0 +1,4 @@
+apiVersion: v2
+name: mariadb-backup
+description: A Helm chart for creating mariadb backup in s3
+version: 0.1.0
