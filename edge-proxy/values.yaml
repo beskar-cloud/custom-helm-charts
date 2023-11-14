@@ -25,6 +25,7 @@ deployment:
   replicaCount: 2
   labels:
     app: edge-proxy
+  #podAnnotations: {}
   nodeSelector:
     node-role.kubernetes.io/control-plane: ""
 
@@ -115,6 +116,8 @@ configuration:
       # HTTPS, port 443
       secure:
         address: "0.0.0.0:443"
+      metrics:
+        address: "0.0.0.0:8082"
 
     # default certificates
     tls:
@@ -140,3 +143,7 @@ configuration:
       file:
         filename: /etc/traefik/traefik-routes.yaml
         watch: true
+
+    metrics:
+      prometheus:
+        entryPoint: metrics

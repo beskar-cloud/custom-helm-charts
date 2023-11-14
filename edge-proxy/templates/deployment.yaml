@@ -16,6 +16,12 @@ spec:
     type: RollingUpdate
   template:
     metadata:
+      annotations:
+        checksum/configmap: {{ include (print $.Template.BasePath "/configs-configmap.yaml") . | sha256sum }}
+{{- if .Values.manifests.certs_secret }}
+        checksum/secret: {{ include (print $.Template.BasePath "/certs-secret.yaml") . | sha256sum }}
+{{- end }}
+        {{- toYaml .Values.deployment.podAnnotations | nindent 8 }}
       labels:
         {{- toYaml .Values.deployment.labels | nindent 8 }}
     spec:
@@ -29,6 +35,8 @@ spec:
         - containerPort: 8080
           protocol: TCP
         - containerPort: 443
+          protocol: TCP
+        - containerPort: 8082
           protocol: TCP
         volumeMounts:
         - mountPath: /etc/traefik/
