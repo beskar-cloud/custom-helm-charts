@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "custom-openstack-exporter.fullname" . }}
+  labels:
+    {{- include "custom-openstack-exporter.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "custom-openstack-exporter.selectorLabels" . | nindent 4 }}
