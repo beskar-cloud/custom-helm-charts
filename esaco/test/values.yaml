@@ -1,0 +1,17 @@
+# raw values injected by Flux CD
+configuration_values:
+  e_infra_cz:
+    client_id: "ABC"         # secret/openstack/keystone-apache-oidc-metadata/oidc_api_client_id
+    client_secret: "A0B1C2"  # secret/openstack/keystone-apache-oidc-metadata/oidc_api_client_secret
+configuration:
+  # templated app configuration
+  oidc_providers: |
+    oidc:
+      clients:
+      - issuer-url: https://login.e-infra.cz/oidc/
+        client-id: {{ .Values.configuration_values.e_infra_cz.client_id }}
+        client-secret: {{ .Values.configuration_values.e_infra_cz.client_secret }}
+  env_vars:
+    ESACO_BIND_PORT: 8080
+    #ESACO_USER_NAME: ""      # configmap/openstack/common/esaco.username
+    #ESACO_USER_PASSWORD: ""  # secret/openstack/common/esaco.password

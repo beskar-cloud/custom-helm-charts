@@ -1,0 +1,76 @@
+{{- if .Values.manifests.deployment }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.name }}
+spec:
+  replicas: {{ .Values.deployment.replicaCount }}
+  selector:
+    matchLabels:
+      {{- toYaml .Values.deployment.labels | nindent 6 }}
+  strategy:
+    # keep N instances up even when upgrading, upgrade one by one
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        checksum/configuration: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum | quote }}
+        {{- if .Values.deployment.podAnnotations }}
+        {{- toYaml .Values.deployment.podAnnotations | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- toYaml .Values.deployment.labels | nindent 8 }}
+    spec:
+      containers:
+      - image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        name: {{ .Values.name }}
+        env:
+        - name: ESACO_USER_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: ESACO_USER_PASSWORD
+              name: {{ .Values.name }}
+        {{range $key, $value := .Values.configuration.env_vars -}}
+        {{- if not (eq $key "ESACO_USER_PASSWORD") -}}
+        - name: {{ $key }}
+          value: {{ $value | quote }}
+        {{ end -}}
+        {{ end -}}
+        ports:
+        - containerPort: {{ .Values.configuration.env_vars.ESACO_BIND_PORT | default 8080 }}
+          protocol: TCP
+        resources:
+          {{- toYaml .Values.deployment.resources | nindent 10 }}
+        livenessProbe:
+          exec:
+            command:
+            - bash
+            - -c
+            - "curl http://127.0.0.1:${ESACO_BIND_PORT}/ | grep -E 'status.?:401'"
+          periodSeconds: 10
+          timeoutSeconds: 2
+        readinessProbe:
+          exec:
+            command:
+            - bash
+            - -c
+            - "curl http://127.0.0.1:${ESACO_BIND_PORT}/ | grep -E 'status.?:401'"
+          periodSeconds: 20
+          timeoutSeconds: 2
+        volumeMounts:
+        - mountPath: /esaco/config/application.yml
+          name: {{ .Values.name }}
+          subPath: application.yml
+          readOnly: true
+      volumes:
+      - name: {{ .Values.name }}
+        secret:
+          defaultMode: 420
+          secretName: {{ .Values.name }}
+      nodeSelector:
+        {{- toYaml .Values.deployment.nodeSelector | nindent 8 }}
+{{- end }}

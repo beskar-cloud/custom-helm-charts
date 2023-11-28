@@ -1,0 +1,28 @@
+{{- if .Values.manifests.service }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.name }}
+spec:
+  internalTrafficPolicy: Cluster
+  ipFamilies:
+  - IPv4
+  ipFamilyPolicy: SingleStack
+  {{- if .Values.service.loadBalancerIP.enabled }}
+  externalTrafficPolicy: Cluster
+  loadBalancerIP: {{ .Values.service.loadBalancerIP.ip }}
+  allocateLoadBalancerNodePorts: {{ .Values.service.loadBalancerIP.allocateLoadBalancerNodePorts }}
+  {{- end }}
+  {{ if .Values.service.clusterIP }}
+  clusterIP: {{ .Values.service.clusterIP }}
+  {{ end }}
+  ports:
+  - port: {{ .Values.service.port }}
+    protocol: TCP
+    targetPort: {{ .Values.configuration.env_vars.ESACO_BIND_PORT | default 8080 }}
+    name: http
+  selector:
+    {{- toYaml .Values.service.selector | nindent 4 }}
+  sessionAffinity: None
+  type: {{ .Values.service.type }}
+{{- end }}

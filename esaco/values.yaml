@@ -1,0 +1,73 @@
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+---
+name: &app esaco
+
+configuration:
+  # Use note: ESACO application accepts YAML config file
+  # Unfortunatelly Flux CD fails to inject path oidc_providers.oidc.clients[0].client-id from cm/secret
+  # Therefore yaml structure is here as templated string, see test/values.yaml for an example
+  oidc_providers: |
+    oidc:
+      clients:
+      - issuer-url: https://login.e-infra.cz/oidc/
+        client-id: 2-a-b-z
+        client-secret: f-2-4-8-b-e-4-9-9
+  env_vars:
+    ESACO_BIND_PORT: 8080
+    ESACO_CACHE: "caffeine"
+    ESACO_TLS_VERSION: "TLSv1.2"
+    ESACO_USER_NAME: "change-me-username"      # changeme: use proper username
+    ESACO_USER_PASSWORD: "change-me-password"  # changeme: use proper password
+    ESACO_ENABLE_BASIC_AUTH: 'true'
+    ESACO_USE_FORWARD_HEADERS: 'true'
+    ESACO_CACHE_SPEC: "maximumSize=500,expireAfterWrite=60s"
+    ESACO_BIND_ADDRESS: "0.0.0.0"
+
+image:
+  repository: registry.gitlab.ics.muni.cz:443/cloud/esaco
+  tag: 0-0-6
+  pullPolicy: IfNotPresent
+
+namespace:
+  name: null                # extra namespace is by default disabled
+
+deployment:
+  replicaCount: 2
+  labels:
+    app: *app
+  podAnnotations: {}
+  nodeSelector:
+    node-role.kubernetes.io/control-plane: ""
+  resources:
+    limits:
+      cpu: 2.0
+      memory: 2.0Gi
+    requests:
+      cpu: 1.0
+      memory: 1.0Gi
+
+service:
+  loadBalancerIP:
+    enabled: false
+  clusterIP: null
+  selector:
+    app: *app
+  type: ClusterIP
+  port: 80
+
+manifests:
+  namespace: true
+  service: true
+  deployment: true
+  secret: true
