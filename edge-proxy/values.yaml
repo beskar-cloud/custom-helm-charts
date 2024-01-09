@@ -44,6 +44,7 @@ manifests:
   service: true
   deployment: true
   configs_configmap: true
+  pvc_letsencrypt: false
   certs_secret: true       # assign false if you want to re-use existing secret
 
 certificates: {}

@@ -45,6 +45,10 @@ spec:
         - mountPath: /etc/traefik-certs/
           name: {{ .Values.name }}-certs
           readOnly: true
+        {{- if .Values.manifests.pvc_letsencrypt }}
+        - mountPath: "/letsencrypt/"
+          name: letsencrypt
+        {{- end }}
       volumes:
       - name: {{ .Values.name }}-configs
         configMap:
@@ -54,6 +58,11 @@ spec:
         secret:
           defaultMode: 420
           secretName: {{ .Values.name }}-certs
+      {{- if .Values.manifests.pvc_letsencrypt }}
+      - name: letsencrypt
+        persistentVolumeClaim:
+          claimName: pvc-letsencrypt
+      {{- end }}
       nodeSelector:
         {{- toYaml .Values.deployment.nodeSelector | nindent 8 }}
 {{- end }}

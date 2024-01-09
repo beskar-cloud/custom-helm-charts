@@ -1,0 +1,13 @@
+{{- if .Values.manifests.pvc_letsencrypt }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-letsencrypt
+spec:
+  storageClassName: external-ceph-rbd-cloud-ceph-blockpool-prod-brno-backup
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+{{- end }}
