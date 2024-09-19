@@ -1,11 +1,11 @@
 apiVersion: v1
 name: egi-accounting
-version: &version 0.2.0
+version: &version 0.2.1
 appVersion: *version
 description: EGI accounting
 home: https://accounting.egi.eu/
 sources:
-  - https://gitlab.ics.muni.cz/cloud/g2/custom-helm-charts/-/tree/master/egi-accounting
+  - https://gitlab.ics.muni.cz/cloud/g2/custom-helm-charts/-/tree/downstream/egi-accounting
   - https://github.com/beskar-cloud/custom-helm-charts/tree/main/egi-accounting
 maintainers:
   - name: e-INFRA CZ cloud team
