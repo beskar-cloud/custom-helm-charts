@@ -1,0 +1,107 @@
+{{- if .Values.cloudkeeper_os.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: &name {{ .Values.name }}-cloudkeeper-os
+  labels:
+    app.kubernetes.io/name: *name
+spec:
+  replicas: {{ .Values.cloudkeeper_os.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: *name
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: *name
+    spec:
+      serviceAccountName: {{ .Values.name }}-auto-config
+      volumes:
+        - name: config
+          configMap:
+            name: {{ .Values.name }}-etc
+        - name: bin
+          configMap:
+            name: {{ .Values.name }}-bin
+            defaultMode: 0755
+        - name: auto-config
+          configMap:
+            name: {{ .Values.name }}-auto-config
+            optional: true
+        - name: images
+          persistentVolumeClaim:
+            claimName: {{ .Values.name }}
+      containers:
+        - name: cloudkeeper-os
+          image: {{ .Values.cloudkeeper_os.image }}:{{ .Values.cloudkeeper_os.tag }}
+          ports:
+          - name: grpc
+            containerPort: 50051
+          volumeMounts:
+            - name: config
+              mountPath: /etc/cloudkeeper-os/cloudkeeper-os.conf
+              subPath: cloudkeeper-os.conf
+              readOnly: true
+            - name: auto-config
+              mountPath: /etc/cloudkeeper-os/mapping.json
+              subPath: mapping.json
+              readOnly: true
+            - name: images
+              mountPath: /var/spool/cloudkeeper/images
+      affinity:
+        podAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 50
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                  - {{ .Values.name }}-cloudkeeper-os
+              topologyKey: kubernetes.io/hostname
+      initContainers:
+        - name: transcribe-mapping
+          image: registry.gitlab.ics.muni.cz:443/cloud/g2/container-registry/docker.io__ubuntu:jammy
+          command: ["/tmp/init.sh"]
+          volumeMounts:
+            - name: bin
+              mountPath: /tmp/init.sh
+              subPath: init.sh
+              readOnly: true
+            - name: bin
+              mountPath: /tmp/transcribe-mapping.py
+              subPath: transcribe-mapping.py
+              readOnly: true
+          env:
+          - name: OS_AUTH_URL
+            valueFrom:
+              secretKeyRef:
+                key: OS_AUTH_URL
+                name: {{ .Values.users.init_keystone_user_secret_name }}
+          - name: OS_PROJECT_DOMAIN_NAME
+            valueFrom:
+              secretKeyRef:
+                key: OS_PROJECT_DOMAIN_NAME
+                name: {{ .Values.users.init_keystone_user_secret_name }}
+          - name: OS_USER_DOMAIN_NAME
+            valueFrom:
+              secretKeyRef:
+                key: OS_USER_DOMAIN_NAME
+                name: {{ .Values.users.init_keystone_user_secret_name }}
+          - name: OS_PROJECT_NAME
+            valueFrom:
+              secretKeyRef:
+                key: OS_PROJECT_NAME
+                name: {{ .Values.users.init_keystone_user_secret_name }}
+          - name: OS_USERNAME
+            valueFrom:
+              secretKeyRef:
+                key: OS_USERNAME
+                name: {{ .Values.users.init_keystone_user_secret_name }}
+          - name: OS_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                key: OS_PASSWORD
+                name: {{ .Values.users.init_keystone_user_secret_name }}
+{{- end }}

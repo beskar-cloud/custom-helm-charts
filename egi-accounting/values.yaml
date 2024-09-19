@@ -1,0 +1,52 @@
+name: egi-accounting
+
+persistence: # TODO: refactor if really needed
+  storageClass: default
+  size: 3Gi
+
+caso:
+  enabled: true
+  schedule: "0 * * * *"
+  image: egifedcloud/caso
+  tag: v0.16
+  config: # https://github.com/enolfc/fedcloudappliance/blob/master/accounting/caso/caso.conf
+    default:
+      messengers: ssmv4
+      site_name: SITE-NAME
+      projects: demo
+    keystone_auth:
+      auth_type: v3password
+      auth_url: https://yourkeystone/v3
+  voms: null
+# voms are deprecated
+#  voms:
+#    vo:
+#      projects: ['1', '2']
+
+ssm:
+  enabled: true
+  schedule: "30 */6 * * *"
+  image: stfc/ssm
+  tag: 3.2.0-1
+  certs:
+    grid_security_cert: "" # /etc/grid-security/hostcert.pem
+    grid_security_key: "" # /etc/grid-security/hostkey.pem
+  config: # https://github.com/apel/ssm/blob/dev/conf/sender.cfg
+    sender:
+      protocol: AMS
+    broker:
+      host: msg.argo.grnet.gr
+      use_ssl: false
+    certificates:
+      certificate: /etc/grid-security/hostcert.pem
+      key: /etc/grid-security/hostkey.pem
+      capath: /etc/grid-security/certificates
+    messaging:
+      ams_project: accounting
+      destination: eu-egi-cloud-accounting
+      path: /var/spool/apel/outgoing/openstack
+      path_type: dirq
+    logging:
+      logfile: /var/log/apel/ssmsend.log
+      level: DEBUG
+      console: true
