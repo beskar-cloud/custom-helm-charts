@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.name }}-etc
+data:
+{{- if .Values.cloudkeeper.enabled }}
+  cloudkeeper.yml: |
+    cloudkeeper:
+      {{- toYaml .Values.cloudkeeper.config | nindent 6 }}
+{{- end }}
+
+{{- if .Values.cloudkeeper_os.enabled }}
+
+  cloudkeeper-os.conf: |
+    [DEFAULT]
+    {{- range $key, $val := .Values.cloudkeeper_os.config.DEFAULT }}
+    {{ $key }} = {{ $val }}
+    {{- end }}
+
+    [keystone_authtoken]
+    {{- range $key, $val := .Values.cloudkeeper_os.config.keystone_authtoken }}
+    {{ $key }} = {{ $val }}
+    {{- end }}
+{{- end }}

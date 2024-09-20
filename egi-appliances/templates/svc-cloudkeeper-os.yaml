@@ -1,0 +1,13 @@
+{{- if .Values.cloudkeeper_os.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.name }}-cloudkeeper-os
+spec:
+  selector:
+    app.kubernetes.io/name: {{ .Values.name }}-cloudkeeper-os
+  ports:
+    - protocol: TCP
+      port: 50051
+      targetPort: 50051
+{{- end }}

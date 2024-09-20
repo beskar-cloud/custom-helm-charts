@@ -1,0 +1,124 @@
+{{- if or .Values.cloudkeeper.enabled .Values.cloudkeeper_os.enabled .Values.reloader.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.name }}-bin
+data:
+  init.sh: |
+    #!/bin/bash
+    set -e
+
+    apt update && apt install -y python3-pip curl
+    python3 -m pip install python-openstackclient
+
+    curl -LO "https://dl.k8s.io/release/v1.24.17/bin/linux/amd64/kubectl"
+    install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+
+  {{- if and .Values.cloudkeeper.enabled .Values.users.init }}
+
+    function assign_role {
+      local role_id=$(openstack role create --or-show -f value -c id "$1");
+      openstack role add \
+        --user="${USER_ID}" \
+        --user-domain="default" \
+        --project-domain="default" \
+        --project="{{ .Values.users.adminProjectID }}" \
+        "${role_id}"
+    }
+
+    printf "\nCreating user.\n"
+    USER_ID=$(openstack user create --or-show --enable -f value -c id \
+      --domain="default" \
+      --project-domain="default" \
+      --project="{{ .Values.users.adminProjectID }}" \
+      --description="Service user for cloudkeeper-os" \
+      "cloudkeeper");
+
+    echo "Setting user password."
+    openstack user set --password="{{ .Values.users.cloudkeeperPassword }}" "${USER_ID}"
+
+    echo "Assigning roles."
+    assign_role reader && assign_role image_uploader
+  {{- end }}
+
+    printf "Running transcribe-mapping.py\n"
+    python3 -u /tmp/transcribe-mapping.py WARNING
+
+    printf "\nCreating configMap.\n"
+    kubectl -n {{ .Release.Namespace }} create configmap {{ .Values.name }}-auto-config \
+      --save-config \
+      --dry-run=client \
+      --from-file=/tmp/mapping.json --from-file=/tmp/image-lists.conf \
+      -o yaml | \
+    kubectl -n {{ .Release.Namespace }} apply -f -
+
+  transcribe-mapping.py: |
+    #!/usr/bin/env python3
+    import sys, logging, json, openstack
+
+    mapping = {}
+    imageLists = []
+    conn = openstack.connect()
+    logging.basicConfig(level=sys.argv[1])
+
+    for project in conn.identity.get_mapping("{{ .Values.cloudkeeper.mapping.name }}").rules:
+        try:
+            name = project['local'][0]['projects'][0]['name']
+            if name in [{{ .Values.cloudkeeper.mapping.exclude_projects }}]:
+                logging.warning(f"Excluded project due to config: {project}")
+                continue
+            mapping[name] = {'project': name, 'domain': "{{ .Values.cloudkeeper.mapping.domain }}"}
+            imageLists.append(f"https://{{ .Values.cloudkeeper.image_list_token }}:x-oauth-basic@vmcaster.appdb.egi.eu/store/vo/{name}/image.list")
+        except KeyError:
+            logging.warning(f"Skipping mapping item due to KeyError: {project}")
+
+    logging.debug(f"Expected mapping.json: {mapping}")
+    logging.debug(f"Expected image-lists.conf written line by line: {imageLists}")
+
+    with open('/tmp/mapping.json', 'w', encoding='utf-8') as f:
+        json.dump(mapping, f, ensure_ascii=False, indent=2)
+
+    with open('/tmp/image-lists.conf', 'w') as f:
+        for project in imageLists: f.write(f"{project}\n")
+
+  {{- if .Values.reloader.enabled }}
+
+  reloader.sh: |
+    #!/bin/bash
+    set -e
+
+    apt update && apt install -y python3-pip curl jq
+    python3 -m pip install python-openstackclient
+
+    curl -LO "https://dl.k8s.io/release/v1.24.17/bin/linux/amd64/kubectl"
+    install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+
+    printf "\nSetup complete. Entering loop...\n"
+    while :
+    do
+      timestamp=$(date +"%D %T")
+      mapping_exists=$(kubectl -n {{ .Release.Namespace }} get cm {{ .Values.name }}-auto-config)
+
+      if [ "$mapping_exists" ]; then
+        echo "${timestamp} - Running transcribe-mapping.py"
+        python3 /tmp/transcribe-mapping.py ERROR
+        printf "\n" >> /tmp/mapping.json
+        echo "${timestamp} - Fetching fresh configMap."
+        kubectl -n {{ .Release.Namespace }} get cm {{ .Values.name }}-auto-config -ojson | jq '.data."mapping.json" | fromjson' > /tmp/mapping.old.json
+
+        if cmp -s "/tmp/mapping.json" "/tmp/mapping.old.json"; then
+          echo "${timestamp} - Mapping didn't change."
+        else
+          echo "${timestamp} - Mapping changed."
+          kubectl -n {{ .Release.Namespace }} rollout restart deployment.apps/{{ .Values.name }}-cloudkeeper-os
+        fi
+
+      else
+        echo "${timestamp} - ConfigMap {{ .Values.name }}-auto-config containing mapping.json not found!"
+      fi
+
+      echo "${timestamp} - Sleeping {{ .Values.reloader.interval }} ..."
+      sleep {{ .Values.reloader.interval }}
+    done
+  {{- end }}
+{{- end }}

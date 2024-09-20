@@ -1,0 +1,68 @@
+{{- if .Values.reloader.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: &name {{ .Values.name }}-reloader
+  labels:
+    app.kubernetes.io/name: *name
+spec:
+  replicas: {{ .Values.reloader.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: *name
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: *name
+    spec:
+      serviceAccountName: {{ .Values.name }}-reloader
+      volumes:
+        - name: bin
+          configMap:
+            name: {{ .Values.name }}-bin
+            defaultMode: 0755
+      containers:
+        - name: reloader
+          image: registry.gitlab.ics.muni.cz:443/cloud/g2/container-registry/docker.io__ubuntu:jammy
+          command: ["/tmp/reloader.sh"]
+          volumeMounts:
+            - name: bin
+              mountPath: /tmp/reloader.sh
+              subPath: reloader.sh
+              readOnly: true
+            - name: bin
+              mountPath: /tmp/transcribe-mapping.py
+              subPath: transcribe-mapping.py
+              readOnly: true
+          env:
+          - name: OS_AUTH_URL
+            valueFrom:
+              secretKeyRef:
+                key: OS_AUTH_URL
+                name: {{ .Values.users.init_keystone_user_secret_name }}
+          - name: OS_PROJECT_DOMAIN_NAME
+            valueFrom:
+              secretKeyRef:
+                key: OS_PROJECT_DOMAIN_NAME
+                name: {{ .Values.users.init_keystone_user_secret_name }}
+          - name: OS_USER_DOMAIN_NAME
+            valueFrom:
+              secretKeyRef:
+                key: OS_USER_DOMAIN_NAME
+                name: {{ .Values.users.init_keystone_user_secret_name }}
+          - name: OS_PROJECT_NAME
+            valueFrom:
+              secretKeyRef:
+                key: OS_PROJECT_NAME
+                name: {{ .Values.users.init_keystone_user_secret_name }}
+          - name: OS_USERNAME
+            valueFrom:
+              secretKeyRef:
+                key: OS_USERNAME
+                name: {{ .Values.users.init_keystone_user_secret_name }}
+          - name: OS_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                key: OS_PASSWORD
+                name: {{ .Values.users.init_keystone_user_secret_name }}
+{{- end }}

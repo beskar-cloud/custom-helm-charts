@@ -1,0 +1,47 @@
+{{- if .Values.cloudkeeper.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ .Values.name }}-cloudkeeper
+spec:
+  schedule: {{ .Values.cloudkeeper.schedule }}
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          volumes:
+            - name: config
+              configMap:
+                name: {{ .Values.name }}-etc
+            - name: auto-config
+              configMap:
+                name: {{ .Values.name }}-auto-config
+            - name: images
+              persistentVolumeClaim:
+                claimName: {{ .Values.name }}
+          containers:
+            - name: cloudkeeper
+              image: {{ .Values.cloudkeeper.image }}:{{ .Values.cloudkeeper.tag }}
+              volumeMounts:
+              - name: config
+                mountPath: /etc/cloudkeeper/cloudkeeper.yml
+                subPath: cloudkeeper.yml
+                readOnly: true
+              - name: auto-config
+                mountPath: /etc/cloudkeeper/image-lists.conf
+                subPath: image-lists.conf
+                readOnly: true
+              - name: images
+                mountPath: /var/spool/cloudkeeper/images
+          restartPolicy: OnFailure
+          affinity:
+            podAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+              - labelSelector:
+                  matchExpressions:
+                  - key: app.kubernetes.io/name
+                    operator: In
+                    values:
+                    - {{ .Values.name }}-cloudkeeper-os
+                topologyKey: kubernetes.io/hostname
+{{- end }}
