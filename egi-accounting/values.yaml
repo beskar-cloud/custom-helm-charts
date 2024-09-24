@@ -1,19 +1,18 @@
-name: egi-accounting
+name: &name egi-accounting
 
-persistence: # TODO: refactor if really needed
+persistence:
   storageClass: default
-  size: 3Gi
+  size: 100Mi
 
 caso:
   enabled: true
   schedule: "0 * * * *"
-  image: egifedcloud/caso
-  tag: v0.16
+  image: registry.gitlab.ics.muni.cz:443/cloud/g2/custom-images/caso
+  tag: "4.2.0-2"
   config: # https://github.com/enolfc/fedcloudappliance/blob/master/accounting/caso/caso.conf
     default:
-      messengers: ssmv4
+      messengers: ssm
       site_name: SITE-NAME
-      projects: demo
     keystone_auth:
       auth_type: v3password
       auth_url: https://yourkeystone/v3
@@ -22,6 +21,7 @@ caso:
 #  voms:
 #    vo:
 #      projects: ['1', '2']
+  affinity: null
 
 ssm:
   enabled: true
@@ -50,3 +50,4 @@ ssm:
       logfile: /var/log/apel/ssmsend.log
       level: DEBUG
       console: true
+  affinity: null

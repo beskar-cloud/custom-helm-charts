@@ -36,16 +36,8 @@ spec:
               - name: accounting
                 mountPath: /var/spool/apel
           restartPolicy: OnFailure
+{{- if .Values.caso.affinity }}
           affinity:
-            podAffinity:
-              preferredDuringSchedulingIgnoredDuringExecution:
-              - weight: 50
-                podAffinityTerm:
-                  labelSelector:
-                    matchExpressions:
-                    - key: app.kubernetes.io/name
-                      operator: In
-                      values:
-                      - {{ .Values.name }}-ssm
-                  topologyKey: kubernetes.io/hostname
+{{- toYaml .Values.caso.affinity | nindent 12 }}
+{{- end }}
 {{- end }}

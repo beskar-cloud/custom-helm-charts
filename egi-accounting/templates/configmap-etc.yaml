@@ -8,12 +8,12 @@ data:
 
   caso.conf: |
     [DEFAULT]
-    {{- range $key, $val := .Values.caso.config.default }}
+    {{- range $key, $val := .Values.caso.config.DEFAULT }}
     {{ $key }} = {{ $val }}
     {{- end }}
 
     [keystone_auth]
-    {{- range $key, $val := .Values.caso.config.keystone_authtoken }}
+    {{- range $key, $val := .Values.caso.config.keystone_auth }}
     {{ $key }} = {{ $val }}
     {{- end }}
 
