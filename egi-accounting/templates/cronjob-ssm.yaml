@@ -42,16 +42,8 @@ spec:
                 subPath: grid_security_key
                 readOnly: true
           restartPolicy: OnFailure
+{{- if .Values.ssm.affinity }}
           affinity:
-            podAffinity:
-              preferredDuringSchedulingIgnoredDuringExecution:
-              - weight: 50
-                podAffinityTerm:
-                  labelSelector:
-                    matchExpressions:
-                    - key: app.kubernetes.io/name
-                      operator: In
-                      values:
-                      - {{ .Values.name }}-caso
-                  topologyKey: kubernetes.io/hostname
+{{- toYaml .Values.ssm.affinity | nindent 12 }}
+{{- end }}
 {{- end }}
