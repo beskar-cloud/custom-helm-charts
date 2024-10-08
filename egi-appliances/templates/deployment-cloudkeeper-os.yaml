@@ -75,33 +75,29 @@ spec:
               readOnly: true
           env:
           - name: OS_AUTH_URL
-            valueFrom:
-              secretKeyRef:
-                key: OS_AUTH_URL
-                name: {{ .Values.users.init_keystone_user_secret_name }}
-          - name: OS_PROJECT_DOMAIN_NAME
-            valueFrom:
-              secretKeyRef:
-                key: OS_PROJECT_DOMAIN_NAME
-                name: {{ .Values.users.init_keystone_user_secret_name }}
-          - name: OS_USER_DOMAIN_NAME
-            valueFrom:
-              secretKeyRef:
-                key: OS_USER_DOMAIN_NAME
-                name: {{ .Values.users.init_keystone_user_secret_name }}
-          - name: OS_PROJECT_NAME
-            valueFrom:
-              secretKeyRef:
-                key: OS_PROJECT_NAME
-                name: {{ .Values.users.init_keystone_user_secret_name }}
+            value: {{ .Values.cloudkeeper_os.config.keystone_authtoken.auth_url | quote }}
           - name: OS_USERNAME
-            valueFrom:
-              secretKeyRef:
-                key: OS_USERNAME
-                name: {{ .Values.users.init_keystone_user_secret_name }}
+            value: {{ .Values.cloudkeeper_os.config.keystone_authtoken.username | quote }}
           - name: OS_PASSWORD
+{{- if .Values.cloudkeeper.enabled }}
             valueFrom:
               secretKeyRef:
-                key: OS_PASSWORD
-                name: {{ .Values.users.init_keystone_user_secret_name }}
+                key: cloudkeeper_user_password
+                name: {{ .Values.name }}-cloudkeeper-user
+{{- else }}
+            value: {{ .Values.cloudkeeper_os.config.keystone_authtoken.password | quote }}
+{{- end }}
+
+{{- if .Values.cloudkeeper_os.config.keystone_authtoken.project_domain_name }}
+          - name: OS_PROJECT_DOMAIN_NAME
+            value: {{ .Values.cloudkeeper_os.config.keystone_authtoken.project_domain_name | quote }}
+{{- end }}
+{{- if .Values.cloudkeeper_os.config.keystone_authtoken.project_domain_name }}
+          - name: OS_USER_DOMAIN_NAME
+            value: {{ .Values.cloudkeeper_os.config.keystone_authtoken.user_domain_name | quote }}
+{{- end }}
+{{- if .Values.cloudkeeper_os.config.keystone_authtoken.project_name }}
+          - name: OS_PROJECT_NAME
+            value: {{ .Values.cloudkeeper_os.config.keystone_authtoken.project_name | quote }}
+{{- end }}
 {{- end }}

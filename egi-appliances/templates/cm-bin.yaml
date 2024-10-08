@@ -67,7 +67,7 @@ data:
             if name in [{{ .Values.cloudkeeper.mapping.exclude_projects }}]:
                 logging.warning(f"Excluded project due to config: {project}")
                 continue
-            mapping[name] = {'project': name, 'domain': "{{ .Values.cloudkeeper.mapping.domain }}"}
+            mapping[name] = {'project': name, 'domain': "{{ .Values.cloudkeeper.mapping.domain_name }}"}
             imageLists.append(f"https://{{ .Values.cloudkeeper.image_list_token }}:x-oauth-basic@vmcaster.appdb.egi.eu/store/vo/{name}/image.list")
         except KeyError:
             logging.warning(f"Skipping mapping item due to KeyError: {project}")
@@ -87,20 +87,24 @@ data:
     #!/bin/bash
     set -e
 
+    printf "\nInstallation packages...\n"
     apt update && apt install -y python3-pip curl jq
     python3 -m pip install python-openstackclient
 
     curl -LO "https://dl.k8s.io/release/v1.24.17/bin/linux/amd64/kubectl"
     install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
 
-    printf "\nSetup complete. Entering loop...\n"
+    printf "\nDoublecheck kubectl - k8s access\n"
+    which kubectl
+    kubectl version
+
+    printf "\nSetup complete. Entering reloader.sh loop...\n"
     while :
     do
       timestamp=$(date +"%D %T")
-      mapping_exists=$(kubectl -n {{ .Release.Namespace }} get cm {{ .Values.name }}-auto-config)
 
-      if [ "$mapping_exists" ]; then
-        echo "${timestamp} - Running transcribe-mapping.py"
+      if kubectl -n {{ .Release.Namespace }} get cm {{ .Values.name }}-auto-config; then
+        echo "${timestamp} - Running transcribe-mapping.py (cm exists)"
         python3 /tmp/transcribe-mapping.py ERROR
         printf "\n" >> /tmp/mapping.json
         echo "${timestamp} - Fetching fresh configMap."

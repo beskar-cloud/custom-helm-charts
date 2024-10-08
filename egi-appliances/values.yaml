@@ -20,7 +20,7 @@ cloudkeeper:
   mapping:
     name: ""                                           # Used for extraction of vos and projects
     exclude_projects: '"{0}", "admin"'
-    domain: egi_eu
+    domain_name: ""
   image_list_token:                                    # etc/cloudkeeper/image-lists.conf
   config:
     image-lists-file: /etc/cloudkeeper/image-lists.conf
@@ -65,11 +65,11 @@ cloudkeeper_os:
   config:                                              # https://github.com/enolfc/fedcloudappliance/blob/master/cloudkeeper/os/cloudkeeper-os.conf
     DEFAULT: {}
     keystone_authtoken:
+      auth_url: http://keystone-api.openstack.svc.cluster.local:5000/v3  # ostack endpoint
       username: ""                                     # cloudkeeper ostack user
       password: ""                                     # cloudkeeper ostack user's pass
-      user_domain_name: egi_eu
-      project_domain_name: egi_eu
-      auth_url: ""                                     # public ostack endpoint
+      #user_domain_name: egi_eu
+      #project_domain_name: egi_eu
 
 reloader:
   enabled: true

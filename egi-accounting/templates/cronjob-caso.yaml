@@ -36,6 +36,10 @@ spec:
               - name: accounting
                 mountPath: /var/spool/apel
           restartPolicy: OnFailure
+{{- if .Values.caso.hostAliases }}
+          hostAliases:
+{{- toYaml .Values.caso.hostAliases | nindent 12 }}
+{{- end }}          
 {{- if .Values.caso.affinity }}
           affinity:
 {{- toYaml .Values.caso.affinity | nindent 12 }}
