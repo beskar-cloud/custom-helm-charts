@@ -42,6 +42,10 @@ spec:
                 subPath: grid_security_key
                 readOnly: true
           restartPolicy: OnFailure
+{{- if .Values.ssm.hostAliases }}
+          hostAliases:
+{{- toYaml .Values.ssm.hostAliases | nindent 12 }}
+{{- end }}
 {{- if .Values.ssm.affinity }}
           affinity:
 {{- toYaml .Values.ssm.affinity | nindent 12 }}

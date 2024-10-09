@@ -22,6 +22,7 @@ caso:
 #    vo:
 #      projects: ['1', '2']
   affinity: null
+  hostAliases: null
 
 ssm:
   enabled: true
@@ -51,3 +52,4 @@ ssm:
       level: DEBUG
       console: true
   affinity: null
+  hostAliases: null
