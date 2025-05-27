@@ -1,0 +1,52 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-entrypoint
+  labels:
+    app.kubernetes.io/name: {{ .Release.Name }}
+data:
+  entrypoint.sh: |
+    #!/bin/bash
+
+    apt update && apt install -y curl mtail nano unzip
+
+    curl -LOs https://github.com/grafana/loki/releases/download/{{ .Values.logcli.tag }}/logcli-{{ .Values.logcli.architecture }}.zip
+    unzip logcli-{{ .Values.logcli.architecture }}.zip && rm -f logcli-{{ .Values.logcli.architecture }}.zip
+    mv logcli-{{ .Values.logcli.architecture }} /usr/local/bin/logcli
+
+    printf "\n-----\n[INFO] Initiation completed :|\n\n"
+    
+    {{- if .Values.selfHeal }}
+    declare -A pid
+    {{- end }}
+
+    logcli --addr="{{ $.Values.logcli.address }}" query -f '{{ .Values.logParsing.combinedQuery }}' --since=24h >> /app/logs/os_all.log & disown
+    {{- if $.Values.selfHeal }}
+    pid["logcli"]=$(echo $!)
+    {{- end }}
+
+    mtail --progs /app/programs --logs $(echo /app/logs/*.log | sed 's/ /,/g') & disown
+    {{- if .Values.selfHeal }}
+    pid["mtail"]=$(echo $!)
+    {{- end }}
+    sleep 5
+    curl -s localhost:3903
+
+    while true; do
+      sleep {{ .Values.logRetention }}
+      for log in /app/logs/*.log; do
+        echo > $log
+      done
+
+      {{- if .Values.selfHeal }}
+      if ! ps aux | grep -q ${pid["logcli"]}; then
+        logcli --addr="{{ $.Values.logcli.address }}" query -f '{{ .Values.logParsing.combinedQuery }}' >> /app/logs/os_all.log & disown
+        pid["{{ .name }}"]=$(echo $!)
+      fi
+
+      if ! ps aux | grep -q ${pid["mtail"]}; then
+        mtail --progs /app/programs --logs $(echo /app/logs/*.log | sed 's/ /,/g') & disown
+        pid["mtail"]=$(echo $!)
+      fi
+      {{- end }}
+    done
