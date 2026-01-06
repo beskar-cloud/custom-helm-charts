@@ -1,0 +1,61 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-programs
+  labels:
+    app.kubernetes.io/name: {{ .Release.Name }}
+data:
+  {{- range .Values.logParsing.programs }}
+  {{- $program := .name }}
+
+  {{ $program }}.mtail: |
+    {{- if .errors }}
+    counter log_errors_total by program
+    {{- end }}
+    {{- if .warnings }}
+    counter log_warnings_total by program
+    {{- end }}
+    {{- if .patterns }}
+    counter log_patterns_total by program, pattern
+    {{- end }}
+
+    {{- $appValue := "" }}
+    {{- $compValue := "" }}
+    {{- $queryParts := .query | trimPrefix "{" | trimSuffix "}" | split "," }}
+    {{- range $index, $part := $queryParts }}
+    {{- if contains "application=" $part }}
+    {{- $appValue = $part | trim | replace "application=" "" | replace "\"" "" }}
+    {{- end }}
+    {{- if contains "component=" $part }}
+    {{- $compValue = $part | trim | replace "component=" "" | replace "\"" "" }}
+    {{- end }}
+    {{- end }}
+
+     /.*{{ $appValue }}.*{{ $compValue }}.*/ {
+      {{- if .errors }}
+      / {{ $.Values.logParsing.generic_regexps.errors }} / {
+        log_errors_total["{{ $program }}"]++
+      }
+      {{- end }}
+
+      {{- if .warnings }}
+      / {{ $.Values.logParsing.generic_regexps.warnings }} / {
+        log_warnings_total["{{ $program }}"]++
+      }
+      {{- end }}
+
+      {{- if .patterns }}
+      {{- range .patterns }}
+      / {{ .regex }} / {
+        log_patterns_total["{{ $program }}"]["{{ .name }}"]++
+      }
+      {{- end }}
+      {{- end }}
+    }
+
+  {{- if .raw }}
+  {{ $program }}-custom.mtail: |
+    {{ .raw | nindent 4 }}
+  {{- end }}
+
+  {{- end }}
