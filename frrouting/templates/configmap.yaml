@@ -1,0 +1,115 @@
+{{- if .Values.manifests.configMap }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "frr-daemon.fullname" . }}-config
+  labels:
+    {{- include "frr-daemon.labels" . | nindent 4 }}
+data:
+  daemons: |
+{{ .Values.config.daemons | indent 4 }}
+  frr.conf: |
+{{ tpl .Values.config.frr . | indent 4 }}
+  vtysh.conf: |
+{{ .Values.config.vtysh | indent 4 }}
+{{- if .Values.reloader.enabled }}
+  reload.sh: |
+    #!/bin/sh
+    set -eu
+
+    SRC="${FRR_CONFIG_SRC:-/config-src/frr.conf}"
+    DST="${FRR_CONFIG_DST:-/etc/frr/frr.conf}"
+    INTERVAL="${RELOAD_INTERVAL_SECONDS:-5}"
+    RUNDIR="${FRR_RELOAD_RUNDIR:-/var/tmp/frr}"
+    RENDER_NODE_VARS="${FRR_RENDER_NODE_VARS:-false}"
+    LOCAL_INTERFACE="${FRR_LOCAL_INTERFACE:-br-gw-nat}"
+
+    log() {
+      echo "[$(date -Iseconds)] frr-reloader: $*"
+    }
+
+    checksum() {
+      sha256sum "$SRC" | awk '{print $1}'
+    }
+
+    render_config() {
+      src_file="$1"
+      dst_file="$2"
+
+      if [ "$RENDER_NODE_VARS" != "true" ]; then
+        cp -Lf "$src_file" "$dst_file"
+        return 0
+      fi
+
+      FRR_LOCAL_IPV4="$(ip -o -4 addr show dev "$LOCAL_INTERFACE" scope global 2>/dev/null | awk '{split($4,a,"/"); print a[1]; exit}')"
+      FRR_LOCAL_IPV6="$(ip -o -6 addr show dev "$LOCAL_INTERFACE" scope global 2>/dev/null | awk '{split($4,a,"/"); print a[1]; exit}')"
+
+      if [ -z "$FRR_LOCAL_IPV4" ]; then
+        log "failed to render FRR config: no IPv4 address found on interface $LOCAL_INTERFACE"
+        return 1
+      fi
+
+      sed \
+        -e "s|__FRR_LOCAL_IPV4__|$FRR_LOCAL_IPV4|g" \
+        -e "s|__FRR_LOCAL_IPV6__|$FRR_LOCAL_IPV6|g" \
+        -e "s|__FRR_LOCAL_INTERFACE__|$LOCAL_INTERFACE|g" \
+        -e "s|__NODE_NAME__|${NODE_NAME:-}|g" \
+        -e "s|__POD_NAME__|${POD_NAME:-}|g" \
+        "$src_file" > "$dst_file"
+    }
+
+    log "waiting for FRR/vtysh to become ready"
+    until vtysh -c 'show running-config' >/dev/null 2>&1; do
+      sleep 1
+    done
+
+    LAST_SUM="$(checksum)"
+    log "FRR is ready, initial config checksum is ${LAST_SUM}"
+
+    while true; do
+      sleep "$INTERVAL"
+
+      if [ ! -f "$SRC" ]; then
+        log "source config $SRC does not exist, skipping"
+        continue
+      fi
+
+      NEW_SUM="$(checksum)"
+
+      if [ "$NEW_SUM" = "$LAST_SUM" ]; then
+        continue
+      fi
+
+      log "detected FRR config change: ${LAST_SUM} -> ${NEW_SUM}"
+
+      TMP_FILE="$(mktemp /tmp/frr.conf.XXXXXX)"
+      if ! render_config "$SRC" "$TMP_FILE"; then
+        log "new FRR config failed runtime rendering; keeping current running config"
+        rm -f "$TMP_FILE"
+        continue
+      fi
+
+      log "testing new FRR config"
+      if ! /usr/lib/frr/frr-reload.py --test "$TMP_FILE" --rundir "$RUNDIR" --stdout; then
+        log "new FRR config failed validation/test; keeping current running config"
+        rm -f "$TMP_FILE"
+        continue
+      fi
+
+      log "copying new FRR config to $DST"
+      cp -Lf "$TMP_FILE" "$DST"
+      chown frr:frr "$DST" || true
+      chmod 640 "$DST" || true
+
+      log "reloading FRR"
+      if /usr/lib/frr/frr-reload.py --reload "$DST" --rundir "$RUNDIR" --stdout; then
+        LAST_SUM="$NEW_SUM"
+        log "FRR reload finished successfully"
+      else
+        log "FRR reload failed; will retry on next loop"
+      fi
+
+      rm -f "$TMP_FILE"
+    done
+{{- end }}
+{{- end }}

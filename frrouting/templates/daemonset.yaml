@@ -1,0 +1,204 @@
+{{- if .Values.manifests.daemonSet }}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "frr-daemon.fullname" . }}
+  labels:
+    {{- include "frr-daemon.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "frr-daemon.selectorLabels" . | nindent 6 }}
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: {{ .Values.updateStrategy.rollingUpdate.maxUnavailable }}
+  template:
+    metadata:
+      labels:
+        {{- include "frr-daemon.selectorLabels" . | nindent 8 }}
+      {{- if or .Values.podAnnotations .Values.reloader.rolloutOnConfigChange }}
+      annotations:
+        {{- if .Values.podAnnotations }}
+        {{- toYaml .Values.podAnnotations | nindent 8 }}
+        {{- end }}
+        {{- if and .Values.manifests.configMap .Values.reloader.rolloutOnConfigChange }}
+        checksumConfigMap: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum | quote }}
+        {{- end }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "frr-daemon.serviceAccountName" . }}
+      hostNetwork: {{ .Values.hostNetwork }}
+      dnsPolicy: {{ .Values.dnsPolicy }}
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . | quote }}
+      {{- end }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        - name: init-frr-config
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              render_config() {
+                src_file="$1"
+                dst_file="$2"
+
+                if [ "${FRR_RENDER_NODE_VARS:-false}" != "true" ]; then
+                  cp -Lf "$src_file" "$dst_file"
+                  return 0
+                fi
+
+                local_if="${FRR_LOCAL_INTERFACE:-br-gw-nat}"
+                local_ipv4="$(ip -o -4 addr show dev "$local_if" scope global 2>/dev/null | awk '{split($4,a,"/"); print a[1]; exit}')"
+                local_ipv6="$(ip -o -6 addr show dev "$local_if" scope global 2>/dev/null | awk '{split($4,a,"/"); print a[1]; exit}')"
+
+                if [ -z "$local_ipv4" ]; then
+                  echo "init-frr-config: no IPv4 address found on interface $local_if" >&2
+                  return 1
+                fi
+
+                sed \
+                  -e "s|__FRR_LOCAL_IPV4__|$local_ipv4|g" \
+                  -e "s|__FRR_LOCAL_IPV6__|$local_ipv6|g" \
+                  -e "s|__FRR_LOCAL_INTERFACE__|$local_if|g" \
+                  -e "s|__NODE_NAME__|${NODE_NAME:-}|g" \
+                  -e "s|__POD_NAME__|${POD_NAME:-}|g" \
+                  "$src_file" > "$dst_file"
+              }
+
+              cp -Lf /config-src/daemons /etc/frr/daemons
+              render_config /config-src/frr.conf /etc/frr/frr.conf
+              cp -Lf /config-src/vtysh.conf /etc/frr/vtysh.conf
+              chown -R frr:frr /etc/frr || true
+              chown frr:frrvty /etc/frr/vtysh.conf || true
+              chmod 640 /etc/frr/* || true
+
+              mkdir -p /var/run/frr
+              rm -f /var/run/frr/*.pid /var/run/frr/*.vty /var/run/frr/*.sock /var/run/frr/watchfrr.started || true
+              chown -R frr:frrvty /var/run/frr || true
+              chmod 775 /var/run/frr || true
+          env:
+            - name: FRR_RENDER_NODE_VARS
+              value: {{ .Values.config.renderNodeVars.enabled | quote }}
+            - name: FRR_LOCAL_INTERFACE
+              value: {{ .Values.config.renderNodeVars.localInterface | quote }}
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+            - name: config-src
+              mountPath: /config-src
+              readOnly: true
+            - name: frr-conf
+              mountPath: /etc/frr
+            - name: frr-sockets
+              mountPath: /var/run/frr
+      containers:
+        - name: frr
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              ulimit -n {{ .Values.fileDescriptorLimit }}
+              exec /sbin/tini -- /usr/lib/frr/docker-start
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: frr-conf
+              mountPath: /etc/frr
+            - name: frr-sockets
+              mountPath: /var/run/frr
+            - name: frr-lib
+              mountPath: /var/lib/frr
+            - name: frr-tmp
+              mountPath: /var/tmp/frr
+            - name: frr-log
+              mountPath: /var/log/frr
+          {{- if .Values.reloader.enabled }}
+        - name: reloader
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - /config-src/reload.sh
+          env:
+            - name: RELOAD_INTERVAL_SECONDS
+              value: {{ .Values.reloader.intervalSeconds | quote }}
+            - name: FRR_CONFIG_SRC
+              value: {{ .Values.reloader.configSource | quote }}
+            - name: FRR_CONFIG_DST
+              value: {{ .Values.reloader.configDestination | quote }}
+            - name: FRR_RELOAD_RUNDIR
+              value: {{ .Values.reloader.rundir | quote }}
+            - name: FRR_RENDER_NODE_VARS
+              value: {{ .Values.config.renderNodeVars.enabled | quote }}
+            - name: FRR_LOCAL_INTERFACE
+              value: {{ .Values.config.renderNodeVars.localInterface | quote }}
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          volumeMounts:
+            - name: config-src
+              mountPath: /config-src
+              readOnly: true
+            - name: frr-conf
+              mountPath: /etc/frr
+            - name: frr-sockets
+              mountPath: /var/run/frr
+            - name: frr-tmp
+              mountPath: /var/tmp/frr
+            - name: frr-log
+              mountPath: /var/log/frr
+{{- end }}
+      volumes:
+        - name: config-src
+          configMap:
+            name: {{ include "frr-daemon.fullname" . }}-config
+            defaultMode: {{ .Values.config.defaultMode }}
+        - name: frr-conf
+          emptyDir: {}
+        - name: frr-sockets
+          hostPath:
+            path: {{ .Values.hostPaths.frrSockets }}
+            type: DirectoryOrCreate
+        - name: frr-lib
+          emptyDir: {}
+        - name: frr-tmp
+          emptyDir: {}
+        - name: frr-log
+          emptyDir: {}
+{{- end }}

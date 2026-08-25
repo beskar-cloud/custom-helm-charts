@@ -1,0 +1,8 @@
+{{- if .Values.manifests.serviceAccount }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "frr-daemon.serviceAccountName" . }}
+  labels:
+    {{- include "frr-daemon.labels" . | nindent 4 }}
+{{- end }}

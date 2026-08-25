@@ -1,0 +1,137 @@
+{{/*
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+   http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/}}
+
+{{- define "ovn.configmap.bin" }}
+{{- $configMapName := index . 0 }}
+{{- $envAll := index . 1 }}
+{{- with $envAll }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $configMapName }}
+data:
+{{- if .Values.images.local_registry.active }}
+  image-repo-sync.sh: |
+{{- include "helm-toolkit.scripts.image_repo_sync" . | indent 4 }}
+{{- end }}
+  ovn-controller-init.sh: |
+{{ tuple "bin/_ovn-controller-init.sh.tpl" . | include "helm-toolkit.utils.template" | indent 4 }}
+  ovn-network-logging-parser.sh: |
+{{ tuple "bin/_ovn-network-logging-parser.sh.tpl" . | include "helm-toolkit.utils.template" | indent 4 }}
+  ovn-bgp-agent-start.sh: |
+    #!/bin/bash
+    set -euo pipefail
+
+    CONFIG_IN="/etc/ovn-bgp-agent/bgp-agent.conf"
+    CONFIG_OUT="/tmp/bgp-agent.conf"
+
+    cp "${CONFIG_IN}" "${CONFIG_OUT}"
+
+    /var/lib/openstack/bin/python /tmp/resolve-ovn-db-hosts.py "${CONFIG_OUT}"
+
+    exec ovn-bgp-agent --config-file "${CONFIG_OUT}"
+  resolve-ovn-db-hosts.py: |
+    import configparser
+    import ipaddress
+    import re
+    import socket
+    import sys
+    import time
+
+    CONFIG_PATH = sys.argv[1]
+    CONNECTION_OPTIONS = ("ovn_nb_connection", "ovn_sb_connection")
+    RETRIES = 30
+    SLEEP_SECONDS = 2
+
+    config = configparser.ConfigParser()
+    config.optionxform = str
+    config.read(CONFIG_PATH)
+
+    def is_ip(value):
+        try:
+            ipaddress.ip_address(value)
+            return True
+        except ValueError:
+            return False
+
+    def resolve_host(host, port):
+        if is_ip(host):
+            return [host]
+
+        last_error = None
+
+        for _ in range(RETRIES):
+            try:
+                addresses = socket.getaddrinfo(
+                    host,
+                    int(port),
+                    family=socket.AF_INET,
+                    type=socket.SOCK_STREAM,
+                )
+
+                resolved = []
+                for address in addresses:
+                    ip = address[4][0]
+                    if ip not in resolved:
+                        resolved.append(ip)
+
+                if resolved:
+                    return resolved
+
+            except socket.gaierror as exc:
+                last_error = exc
+
+            time.sleep(SLEEP_SECONDS)
+
+        raise RuntimeError(f"Could not resolve {host}: {last_error}")
+
+    def resolve_connection_string(value):
+        resolved_connections = []
+
+        for item in value.split(","):
+            item = item.strip()
+            match = re.match(r"^tcp:([^:]+):([0-9]+)$", item)
+
+            if not match:
+                resolved_connections.append(item)
+                continue
+
+            host, port = match.groups()
+
+            for ip in resolve_host(host, port):
+                resolved_connections.append(f"tcp:{ip}:{port}")
+
+        return ",".join(resolved_connections)
+
+    for option in CONNECTION_OPTIONS:
+        if config.has_option("ovn", option):
+            original = config.get("ovn", option)
+            resolved = resolve_connection_string(original)
+            print(f"{option}: {original} -> {resolved}", flush=True)
+            config.set("ovn", option, resolved)
+
+    with open(CONFIG_PATH, "w") as config_file:
+        config.write(config_file)
+
+{{- if .Values.pod.sidecars.frr }}
+  frr.sh: |
+{{ tuple "bin/_ovn-frr.sh.tpl" . | include "helm-toolkit.utils.template" | indent 4 }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{- if .Values.manifests.configmap_bin }}
+{{- list "ovn-bin" . | include "ovn.configmap.bin" }}
+{{- end }}
