@@ -1,0 +1,151 @@
+nameOverride: ""
+fullnameOverride: ""
+
+manifests:
+  daemonSet: true
+  serviceAccount: true
+  configMap: true
+
+image:
+  repository: quay.io/frrouting/frr
+  tag: "10.4.3"
+  pullPolicy: IfNotPresent
+
+serviceAccount:
+  create: true
+  name: ""
+
+hostNetwork: true
+dnsPolicy: ClusterFirstWithHostNet
+
+updateStrategy:
+  rollingUpdate:
+    maxUnavailable: 1
+
+podAnnotations: {}
+
+securityContext:
+  privileged: true
+  allowPrivilegeEscalation: true
+  capabilities:
+    add:
+      - NET_ADMIN
+      - NET_RAW
+      - SYS_ADMIN
+      - NET_BIND_SERVICE
+
+hostPaths:
+  frrSockets: /run/frr
+
+podSecurityContext: {}
+
+resources:
+  requests:
+    cpu: 20m
+    memory: 64Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+nodeSelector: {}
+
+# run also on control-plane nodes by default
+tolerations:
+  - key: node-role.kubernetes.io/master
+    operator: Exists
+    effect: NoSchedule
+  - key: node-role.kubernetes.io/control-plane
+    operator: Exists
+    effect: NoSchedule
+
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/os
+              operator: In
+              values:
+                - linux
+
+priorityClassName: ""
+
+# set limit to avoid warnings
+fileDescriptorLimit: 100000
+
+config:
+  defaultMode: 420
+
+  # Optional runtime rendering for per-node FRR config.
+  # When enabled, init/reloader replace placeholders in config.frr using
+  # values detected inside each pod, while keeping config.frr fully configurable.
+  # Supported placeholders:
+  #   __FRR_LOCAL_IPV4__       IPv4 address on localInterface, without prefix
+  #   __FRR_LOCAL_IPV6__       IPv6 address on localInterface, without prefix, if any
+  #   __FRR_LOCAL_INTERFACE__  interface name, for example br-gw-nat
+  #   __NODE_NAME__            Kubernetes node name
+  #   __POD_NAME__             Kubernetes pod name
+  renderNodeVars:
+    enabled: false
+    localInterface: br-gw-nat
+
+  daemons: |
+    MAX_FDS=100000
+
+    zebra=yes
+    bgpd=yes
+    ospfd=no
+    ospf6d=no
+    ripd=no
+    ripngd=no
+    isisd=no
+    pimd=no
+    ldpd=no
+    nhrpd=no
+    eigrpd=no
+    babeld=no
+    sharpd=no
+    pbrd=no
+    bfdd=yes
+    fabricd=no
+    vrrpd=no
+    staticd=yes
+
+    vtysh_enable=yes
+
+    watchfrr_options=" --limit-fds 100000"
+    mgmtd_options=" --limit-fds 100000"
+    zebra_options=" -A 127.0.0.1 -s 90000000 --limit-fds 100000"
+    bgpd_options=" -A 127.0.0.1 --limit-fds 100000"
+    bfdd_options=" -A 127.0.0.1 --limit-fds 100000"
+    staticd_options=" -A 127.0.0.1 --limit-fds 100000"
+
+  # no-op frr config
+  frr: |
+    frr version 10.4
+    frr defaults traditional
+    hostname frr-k8s-node
+    log stdout informational
+    service integrated-vtysh-config
+    !
+    ! Silent / no-op mode:
+    ! - no BGP router configured
+    ! - no neighbors
+    ! - no prefixes advertised
+    !
+    line vty
+
+  vtysh: |
+    service integrated-vtysh-config
+
+reloader:
+  enabled: true
+  intervalSeconds: 5
+
+  # If true, Helm/Flux ConfigMap changes still roll pods through checksum annotation.
+  # If false, frr.conf changes are handled only by the reloader sidecar.
+  rolloutOnConfigChange: false
+
+  configSource: /config-src/frr.conf
+  configDestination: /etc/frr/frr.conf
+  rundir: /var/tmp/frr
